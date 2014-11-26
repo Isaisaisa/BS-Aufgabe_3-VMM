@@ -44,6 +44,7 @@ struct pt_entry {
     int count;                  /* For LRU algo */
 };
 
+//For administration of algorithms 
 struct vmem_adm_struct {
     int size;
     pid_t mmanage_pid;

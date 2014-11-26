@@ -149,17 +149,18 @@ void init_pagefile(const char *pfname){
     
 }
 
-
+/* initialize virtual memory*/
+void vmem_init(void){
+    
+    
+}
 
 
 void sighandler(int signo){
     
 }
 
-/* initialize virtual memory*/
-void vmem_init(void){
-    
-}
+
 
 void allocate_page(void){
     
@@ -198,7 +199,7 @@ int search_bitmap(void){
 }
 
 int find_free_bit(Bmword bmword, Bmword mask){
-    return 1;
+    return 0;
 }
 
 void cleanup(void){
