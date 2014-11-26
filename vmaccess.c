@@ -11,7 +11,11 @@ void vm_init(void){
 }
 
 /* Read from "virtual" address */
-int vmem_read(int address);
+int vmem_read(int address){
+    return 0;
+}
 
 /* Write data to "virtual" address */
-void vmem_write(int address, int data);
+void vmem_write(int address, int data){
+   
+}

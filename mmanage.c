@@ -128,3 +128,83 @@ logger(struct logevent le)
     fflush(logfile);
 }
 
+
+/*initialize pagefile*/
+void init_pagefile(const char *pfname){
+    
+    int content_for_pagefile[VMEM_VIRTMEMSIZE];  //size of array = 1024 -> space in pagefile
+    
+    srand(SEED); //Method of c library: void srand(unsigned int seed)
+    
+    int i;
+    for(i = 0 ; i < VMEM_VIRTMEMSIZE ; i++ ) {
+        content_for_pagefile[i] = rand() % 100;  //Zahlen zwischen 0..99
+    }
+    
+    FILE *data_out; 
+    data_out = fopen( MMANAGE_PFNAME, "w");
+    
+    //fwrite(Array, Type in Array, Size of Array, Filename)
+    fwrite(&content_for_pagefile, sizeof(int), VMEM_VIRTMEMSIZE, data_out);
+    
+}
+
+
+
+
+void sighandler(int signo){
+    
+}
+
+/* initialize virtual memory*/
+void vmem_init(void){
+    
+}
+
+void allocate_page(void){
+    
+}
+
+void fetch_page(int pt_idx){
+    
+}
+
+void store_page(int pt_idx){
+    
+}
+
+void update_pt(int frame){
+    
+}
+
+int find_remove_frame(void){
+    return 0;
+}
+
+int find_remove_fifo(void){
+    return 0;
+}
+
+int find_remove_lru(void){
+    return 0;
+}
+
+int find_remove_clock(void){
+    return 0;
+}
+
+int search_bitmap(void){
+    return 0;
+}
+
+int find_free_bit(Bmword bmword, Bmword mask){
+    return 0;
+}
+
+void cleanup(void){
+    
+}
+
+void dump_pt(void){
+    
+}
