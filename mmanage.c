@@ -198,7 +198,7 @@ int search_bitmap(void){
 }
 
 int find_free_bit(Bmword bmword, Bmword mask){
-    return 0;
+    return 1;
 }
 
 void cleanup(void){
