@@ -19,7 +19,7 @@
 
 #include "mmanage.h"
 
-struct vmem_struct *vmem = NULL;
+struct vmem_struct *vmem = NULL; //Pointer auf die Struktur vmem_struct. (vgl mit Instanz von einer Klasse)
 FILE *pagefile = NULL;
 FILE *logfile = NULL;
 int signal_number = 0;          /* Received signal */
@@ -155,57 +155,85 @@ void vmem_init(void){
     
 }
 
-
+/* TODO weiterschrieben!!!!! */
 void sighandler(int signo){
-    
+    /* if the input is the same as SIGUSR1 then allocate a page*/
+    if (signo == SIGUSR1){
+        allocate_page();
+    }else if(signo == SIGUSR2){
+        
+    }
 }
 
 
-
+/* Seite zuweisen/belegen/reservieren */
 void allocate_page(void){
+    int required_page_number = vmem->adm.req_pageno;
     
 }
 
-void fetch_page(int pt_idx){
+/* Speicherauszug/Ansicht von pagetable*/
+void dump_pt(void){
     
 }
 
-void store_page(int pt_idx){
-    
-}
-
-void update_pt(int frame){
-    
-}
-
-int find_remove_frame(void){
-    return 0;
-}
-
-int find_remove_fifo(void){
-    return 0;
-}
-
-int find_remove_lru(void){
-    return 0;
-}
-
-int find_remove_clock(void){
-    return 0;
-}
-
-int search_bitmap(void){
-    return 0;
-}
-
-int find_free_bit(Bmword bmword, Bmword mask){
-    return 0;
-}
-
+/* Aufräumen des Programms bei Beendigung:
+ *  - Shared Memory freigeben
+ *  - Semaphor löschen
+ *  - Dateien schließen
+*/
 void cleanup(void){
     
 }
 
-void dump_pt(void){
+/* Seite (Page) aus der Pagefile holen, 
+ * um damit weiterarbeiten zu können*/
+void fetch_page(int pt_idx){
     
+}
+
+/* Die übergebene Pagetable_ID in die Pagefile speichern 
+ * MMANAGE_PFNAME  = "./pagefile.bin" */
+void store_page(int pt_idx){
+    
+}
+
+/* Die Seitentabelle (Pagetable) aktualisieren. D.h. Änderungen speiern*/
+void update_pt(int frame){
+    
+}
+
+/* Findet einen Frame der freigemacht werden kann,
+ * um etwas neues dort einlagern zu können. 
+ * Die Findung hängt von den jeweiligen Algorithmen (FIFO, CLOCK, LRU) ab*/
+int find_remove_frame(void){
+    return 0;
+}
+
+/* Algorithmus FIFO */
+int find_remove_fifo(void){
+    return 0;
+}
+
+/* Algorithmus LRU */
+int find_remove_lru(void){
+    return 0;
+}
+
+/* Algorithmus CLOCK*/
+int find_remove_clock(void){
+    return 0;
+}
+
+/* Freien Platz (0) in der Bitmap suchen.
+ * Kontstanten und Struct in cmem.h */
+int search_bitmap(void){
+    return 0;
+}
+
+
+/* Findet die Adresse des freien Platzes in der Bitmap 
+ * -> Hilffunktion*/
+int find_free_bit(Bmword bmword, Bmword mask){
+    return 0;
 }
