@@ -428,11 +428,28 @@ int find_remove_clock(void){
 
 
 
-/* Freien Platz (0) in der Bitmap suchen.
+/* Freien Platz (alles != -1) in der Bitmap suchen.
  * return: Position/Adresse des freien Bits 
  * Kontstanten und Struct in vmem.h */
 int search_bitmap(void){
-    return 0;
+    int i;
+    int free_bit = VOID_IDX;
+    
+    for(i = 0; i< VMEM_BMSIZE; i++){
+        
+        Bmword bitmap = vmem->adm.bitmap[i];
+        Bmword mask = (i == (VMEM_BMSIZE - 1) ? VMEM_LASTBMMASK : 0);
+        free_bit = find_free_bit(bitmap, mask);
+        
+        if(free_bit != VOID_IDX){
+            int offset = i * VMEM_BITS_PER_BMWORD;
+            free_bit = free_bit + offset;
+            break;          /* wenn free_bit != -1 dann gehe aus der for-Schleife raus*/
+        }
+    }
+    
+    
+    return free_bit;
 }
 
 
@@ -446,5 +463,22 @@ int search_bitmap(void){
 /* Findet die Adresse des freien Platzes in der Bitmap 
  * -> Hilffunktion*/
 int find_free_bit(Bmword bmword, Bmword mask){
-    return 0;
+    int bit = VOID_IDX;
+    
+    /* Bitmaske wird mit 1 initialisiert */
+    Bmword bitmask = 1;
+    
+    bmword = (bmword | mask); /* Bitweise "oder" rechnen */
+    
+    for(bit = 0; bit < VMEM_BITS_PER_BMWORD; bit++){
+        
+        /* */
+        if(!(bmword & bitmask)){
+            break;
+        }
+        
+        bitmask = bitmask << 1; /* shift nach links um 0001 */
+    }
+    
+    return (bit < VMEM_BITS_PER_BMWORD) ? (bit) : (VOID_IDX);
 }
