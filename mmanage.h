@@ -53,7 +53,7 @@ void logger(struct logevent le);
 void dump_pt(void);
 
 /* Misc */
-#define MMANAGE_PFNAME "./pagefile.bin" /* pagefile name */
+#define MMANAGE_PFNAME "./pagefile.bin"         /* pagefile name */
 #define MMANAGE_LOGFNAME "./logfile.txt"        /* logfile name */
 
 #define VMEM_ALGO_FIFO  0

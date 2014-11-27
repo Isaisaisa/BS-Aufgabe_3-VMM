@@ -129,6 +129,13 @@ logger(struct logevent le)
 }
 
 
+
+
+
+
+
+
+
 /*initialize pagefile*/
 void init_pagefile(const char *pfname){
     
@@ -149,13 +156,70 @@ void init_pagefile(const char *pfname){
     
 }
 
+
+
+
+
+
+
+
 /* initialize virtual memory*/
 void vmem_init(void){
+    key_t shm_key = 0;
+    int shm_id = -1;
     
+    /* Create shared memory 
+     * ftok() generates an IPC key based on path and id */
+    shm_key = ftok(SHMKEY, SHMPROCID);
+    
+    /* Set the IPC_CREAT flag 
+     * shmget(Shared Memory kann von mehr als ein Prozess zugegriffen werden, Größe des Shared Memory in Bytes, ein Flag)*/
+    shm_id = shmget(shm_key, SHMSIZE, 0664 | IPC_CREAT);
+    
+    if (shm_id == -1) {
+        fprintf(stderr, "shmget failed\n");
+        exit(EXIT_FAILURE);
+    }
+    
+    /* Shared Memory für das Programm verfügbar machen */
+    int vmem = shmat(shm_id, NULL, 0);
+                                                        //http://man7.org/linux/man-pages/man2/shmat.2.html
+    if (vmem == (void *)-1) {
+        fprintf(stderr, "making the shared memory accessible to the program (shmat) failed\n");
+        exit(EXIT_FAILURE);
+    }
+    
+    /* Pagetable initialisieren: */ 
+    /* size of ? 128*8=1024 */
+    vmem->adm.size = VMEM_VIRTMEMSIZE;   /* (VMEM_NPAGES * VMEM_PAGESIZE) = VMEM_VIRTMEMSIZE = ((VMEM_VIRTMEMSIZE / VMEM_PAGESIZE) * VMEM_PAGESIZE) */
+    vmem->adm.mmanage_pid = getpid();
+    vmem->adm.shm_id = shm_id;
+    
+    /* unterhalb der Prozesse teilen 
+     *  int sem_init(sem_t *sem, int pshared, unsigned int value)
+     *  initialisiert das namenslose Semaphore an der Adresse des 
+     *  Pointers sem. Das Argument value spezifiziert den Wert des Semaphors.
+     *  Ist pshared = 0 dann wird das Semaphore nur unter Threads eines
+     *   Prozesses geteilt. 
+     *  Ist pshared = 1 (bzw. eine Zahl != 0) dann wird das Semaphore unter
+     *   mehreren Prozessen geteilt. */
+    int semaphore = sem_init(&(vmem->adm.sema), 1, 0);
+    if(semaphore == -1){
+        fprintf(stderr, "Semaphore couldn\'t initialized\n");
+        exit(EXIT_FAILURE);
+    }
+    
+    return;
     
 }
 
-/* ------------------------------TODO weiterschrieben!!!!! ----------------------*/
+
+
+
+
+
+
+/* ------------------------------TODO weiterschreiben!!!!! ----------------------*/
 void sighandler(int signo){
     /* if the input is the same as SIGUSR1 then allocate a page*/
     if (signo == SIGUSR1){
@@ -164,6 +228,11 @@ void sighandler(int signo){
         
     }
 }
+
+
+
+
+
 
 
 /* Seite zuweisen/belegen/reservieren */
@@ -243,10 +312,18 @@ void allocate_page(void){
 
 
 
+
+
+
 /* Speicherauszug/Ansicht von pagetable*/
 void dump_pt(void){
     
 }
+
+
+
+
+
 
 /* Aufräumen des Programms bei Beendigung:
  *  - Shared Memory freigeben
@@ -257,6 +334,12 @@ void cleanup(void){
     
 }
 
+
+
+
+
+
+
 /* Seite (Page) aus der Pagefile holen, 
  * um damit weiterarbeiten zu können 
  * Parameter: pt_idx: Seitennummer (virtueller Speicher)*/
@@ -264,17 +347,35 @@ void fetch_page(int pt_idx){
     
 }
 
+
+
+
+
+
+
 /* Die übergebene Pagetable_ID in die Pagefile speichern 
  * MMANAGE_PFNAME  = "./pagefile.bin" */
 void store_page(int pt_idx){
     
 }
 
+
+
+
+
+
+
 /* Die Seitentabelle (Pagetable) aktualisieren. D.h. Änderungen speiern
  * Parameter: frame: Seitenrahmennummer */
 void update_pt(int frame){
     
 }
+
+
+
+
+
+
 
 /* Findet einen Frame der freigemacht werden kann,
  * um etwas neues dort einlagern zu können. 
@@ -284,20 +385,48 @@ int find_remove_frame(void){
     return 0;
 }
 
+
+
+
+
+
+
+
 /* Algorithmus FIFO */
 int find_remove_fifo(void){
     return 0;
 }
+
+
+
+
+
+
+
 
 /* Algorithmus LRU */
 int find_remove_lru(void){
     return 0;
 }
 
+
+
+
+
+
+
+
 /* Algorithmus CLOCK*/
 int find_remove_clock(void){
     return 0;
 }
+
+
+
+
+
+
+
 
 /* Freien Platz (0) in der Bitmap suchen.
  * return: Position/Adresse des freien Bits 
@@ -305,6 +434,13 @@ int find_remove_clock(void){
 int search_bitmap(void){
     return 0;
 }
+
+
+
+
+
+
+
 
 
 /* Findet die Adresse des freien Platzes in der Bitmap 
