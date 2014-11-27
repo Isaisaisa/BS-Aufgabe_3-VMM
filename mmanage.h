@@ -8,6 +8,7 @@
 #define MMANAGE_H
 #include "vmem.h"
 #include <limits.h>
+#include <stdio.h>
 
 /* Event struct for logging */
 struct logevent {

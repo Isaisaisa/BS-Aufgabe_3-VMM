@@ -155,7 +155,7 @@ void vmem_init(void){
     
 }
 
-/* TODO weiterschrieben!!!!! */
+/* ------------------------------TODO weiterschrieben!!!!! ----------------------*/
 void sighandler(int signo){
     /* if the input is the same as SIGUSR1 then allocate a page*/
     if (signo == SIGUSR1){
@@ -168,9 +168,80 @@ void sighandler(int signo){
 
 /* Seite zuweisen/belegen/reservieren */
 void allocate_page(void){
-    int required_page_number = vmem->adm.req_pageno;
+    int requested_page_number = vmem->adm.req_pageno; /* Die Nummer der angeforderten Seite (befindet sich im Struct vmem_adm_struct)*/
+    int free_space_in_bitmap = VOID_IDX;              /* ist Hilfe heißt es frame*/
+    int removed_page_id = VOID_IDX;
+    
+    /* wenn Page schon geladen */
+    if(vmem->pt.entries[req_pageno].flags & PTF_PRESENT){
+        /* dann gehe aus der Funktion heraus */
+        return;
+    }
+    
+    
+    /* freien Platz in Bitmap suchen
+     * return -1, dann keinen freien Platz verfügbar
+     * sonst gibt Platz zurück */
+    free_space_in_bitmap = search_bitmap();
+    
+    
+    if(free_space_in_bitmap != VOID_IDX){
+        
+        fprintf(stderr, "Found free frame no %d, allocaing page\n", free_space_in_bitmap);
+        
+    }else{   
+        /* Wenn kein Platz verfügbar ist
+           mache je nach Algorithmus einen Platz frei */
+        free_space_in_bitmap = find_remove_frame();  
+        
+        /* schreibe den freien Platz in die Struktur */
+        removed_page_id = vmem->pt.framepage[free_space_in_bitmap];
+        
+        /* pb_flag_of_page: Present-Bit der Seite */
+        int pb_flag_of_page = vmem->pt.entries[removed_page_id].flags;
+        
+    }
+    
+    /* Wenn Seite (Page) geändert wurde */
+    if(pb_flag_of_page == PTF_DIRTY){  /* wenn das Flag des freigemachten Platzes auf 2 (Dirty) gesetzt ist */    /*--------------------- HIER EVTL. STATT == EIN & !!!*/
+        store_page(removed_page_id);                           /* dann speichere die Seite in der Pagefile */
+    }
+
+    /* Das Flag wird zurückgesetzt, indem es bitweise mit dem Komplement
+     * von dem Present-Bit addiert wird.
+     * D.h. Flag 1, Present-Bit 1  
+     *                 0001 (Flag ist 1)
+     *                &0000 (Komplement von Present-Bit 1)
+     *                =0000 (Flag ist jetzt 0)
+     */
+    pb_flag_of_page = (pb_flag_of_page & ~PTF_PRESENT);  
+        
+    
+    
+    /* Freie Stelle wird geupdated */
+    update_pt(free_space_in_bitmap);
+    fetch_page(requested_page_number);
+    
+    /* Update page fault counter */
+    vmem->adm.pf_count++;
+    
+    /* Log action */
+    struct logevent levcent;
+    levcent.req_pageno = requested_page_number;
+    levcent.replaced_page = removed_page_id;          
+    levcent.alloc_frame = free_space_in_bitmap;
+    levcent.pf_count = vmem->adm.pf_count;
+    levcent.g_count = vmem->adm.g_count;
+    logger(levcent);
+    
+    /* Unblock application */
+    sem_post(&(vmem->adm.sema));
     
 }
+
+
+
+
 
 /* Speicherauszug/Ansicht von pagetable*/
 void dump_pt(void){
@@ -187,7 +258,8 @@ void cleanup(void){
 }
 
 /* Seite (Page) aus der Pagefile holen, 
- * um damit weiterarbeiten zu können*/
+ * um damit weiterarbeiten zu können 
+ * Parameter: pt_idx: Seitennummer (virtueller Speicher)*/
 void fetch_page(int pt_idx){
     
 }
@@ -198,14 +270,16 @@ void store_page(int pt_idx){
     
 }
 
-/* Die Seitentabelle (Pagetable) aktualisieren. D.h. Änderungen speiern*/
+/* Die Seitentabelle (Pagetable) aktualisieren. D.h. Änderungen speiern
+ * Parameter: frame: Seitenrahmennummer */
 void update_pt(int frame){
     
 }
 
 /* Findet einen Frame der freigemacht werden kann,
  * um etwas neues dort einlagern zu können. 
- * Die Findung hängt von den jeweiligen Algorithmen (FIFO, CLOCK, LRU) ab*/
+ * Die Findung hängt von den jeweiligen Algorithmen (FIFO, CLOCK, LRU) ab
+ * return: freier Platz*/
 int find_remove_frame(void){
     return 0;
 }
@@ -226,7 +300,8 @@ int find_remove_clock(void){
 }
 
 /* Freien Platz (0) in der Bitmap suchen.
- * Kontstanten und Struct in cmem.h */
+ * return: Position/Adresse des freien Bits 
+ * Kontstanten und Struct in vmem.h */
 int search_bitmap(void){
     return 0;
 }
