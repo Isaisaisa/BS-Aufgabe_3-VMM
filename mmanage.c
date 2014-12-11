@@ -225,7 +225,6 @@ void vmem_init(void){
 
 
 
-/* ------------------------------TODO weiterschreiben!!!!! ----------------------*/
 void sighandler(int signo){
     /* if the input is the same as SIGUSR1 then allocate a page*/
     if (signo == SIGUSR1){
