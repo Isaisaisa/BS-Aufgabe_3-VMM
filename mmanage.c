@@ -24,6 +24,12 @@ FILE *pagefile = NULL;
 FILE *logfile = NULL;
 int signal_number = 0;          /* Received signal */
 
+/* Zähler für den Index im physikalischen Speicher, 
+ * der bis zur maximalen Indexgröße des Speichers hochgezählt wird.
+ * Ist also speicher noch frei kann immer in den nächsten Index die Page
+ * eingetragen werden*/
+int index_counter = 0; 
+
 int
 main(void)
 {
@@ -225,7 +231,10 @@ void sighandler(int signo){
     if (signo == SIGUSR1){
         allocate_page();
     }else if(signo == SIGUSR2){
-        
+        dump_pt();
+    }else if(igno == SIGINT){
+        cleanup();
+        exit(EXIT_SUCCESS);
     }
 }
 
@@ -238,7 +247,7 @@ void sighandler(int signo){
 /* Seite zuweisen/belegen/reservieren */
 void allocate_page(void){
     int requested_page_number = vmem->adm.req_pageno; /* Die Nummer der angeforderten Seite (befindet sich im Struct vmem_adm_struct)*/
-    int free_space_in_bitmap = VOID_IDX;              /* ist Hilfe heißt es frame*/
+    int free_space_in_bitmap = VOID_IDX;              /* in Hilfe heißt es frame*/
     int removed_page_id = VOID_IDX;
     
     /* wenn Page schon geladen */
@@ -251,7 +260,18 @@ void allocate_page(void){
     /* freien Platz in Bitmap suchen
      * return -1, dann keinen freien Platz verfügbar
      * sonst gibt Platz zurück */
-    free_space_in_bitmap = search_bitmap();
+//    free_space_in_bitmap = search_bitmap();
+    
+    /* Einfacher ist es:
+     * Am Anfang sind alle Plätze. Der Zähler index_counter wird hochgezählt
+     * um den nächsten Index in dem man eine Page eintragen kann. Bis zur
+     * maximalen Größe minus eins des physikalischen Speichers muss kein Pagefault ausgeführt 
+     * werden, danach immer!*/
+    if(index_counter < VMEM_NFRAMES){
+        free_space_in_bitmap = index_counter;
+        index_counter++;
+    }
+   
     
     
     if(free_space_in_bitmap != VOID_IDX){
@@ -318,6 +338,25 @@ void allocate_page(void){
 /* Speicherauszug/Ansicht von pagetable*/
 void dump_pt(void){
     
+    /* int fprintf(FILE *stream, const char *format, ...) 
+     * stream -> Pointer auf die Datei
+     * format -> Stringformatierung der Ausgabe */
+    fprintf(stderr, "Dump pagetable\n\n");
+
+    fprintf(stderr, "admin struct\n");
+    fprintf(stderr, "------------\n");
+    fprintf(stderr, "size: %d, pf_count: %d\n", vmem->adm.size, vmem->adm.pf_count);
+    fprintf(stderr, "req_pageno: %d, next_alloc_idx: %d\n", vmem->adm.req_pageno, vmem->adm.next_alloc_idx);
+    fprintf(stderr, "g_count: %d\n\n", vmem->adm.g_count);
+
+    fprintf(stderr, "data\n");
+    fprintf(stderr, "----\n");
+    
+    int i; 
+    // Daten des Shared Memory ausgeben
+    for(i = 0; i < (VMEM_NFRAMES * VMEM_PAGESIZE); i++) {
+        fprintf(stderr, "idx %d: %d\n", i, vmem->data[i]);
+    }
 }
 
 
@@ -331,7 +370,24 @@ void dump_pt(void){
  *  - Dateien schließen
 */
 void cleanup(void){
+    /* Shared Memory freigeben */
+    int shm_id = vmem->adm.shm_id;
+    /* Erlaubnis des Shared Memory ändern */
+    shmctl(shm_id, IPC_RMID, 0);
     
+    
+     /* Semaphore löschen */
+    if (fclose(logfile) != 0){
+        perror("Error closing logfile");
+        exit(EXIT_FAILURE);
+    }
+    
+    /* datei Pagefile schließen */
+    if (fclose(pagefile) != 0){
+        perror("Error closing pagefile");
+        exit(EXIT_FAILURE);
+    }
+       
 }
 
 
@@ -345,6 +401,31 @@ void cleanup(void){
  * Parameter: pt_idx: Seitennummer (virtueller Speicher)*/
 void fetch_page(int pt_idx){
     
+    /* sizeof(): Rückgabewert ist die Größe des Typs in Bytes
+     * VMEM_PAGESIZE: hier 8 Items per page 
+     * Beispiel: pt_idx = 2, sizeof(int) = 4Bit, VMEM_PAGESIZE = 8
+     * 2*4*8 = 64 --> 0010 * 0100 * 1000 = 000001000000 */
+    int offset = pt_idx * sizeof(int) * VMEM_PAGESIZE;
+    
+    /* in der Seitentabelle die integer Zahl im physikalischen Speichers, 
+     * die zu der Zahl pt_idx aus dem virtuellen Speicher gehört 
+     * pt.entries[pt_idx]: der Eintrag in der Seitentabelle an der Stelle von 
+     * pt_idx im virtuellen Speicher von */
+    int frame = vmem->pt.entries[pt_idx].frame;
+    
+    /* */
+    int *pstart = &(vmem->data[frame * VMEM_PAGESIZE]);
+    
+    /* fseek: die Funktion ändert die Position der Datei des spezifizierten Flusses. 
+     * SEEK_SET: beginning of file, 
+     * SEEK_CUR: Current Position of the file pointer,
+     * SEEK_END: End of file */
+    if(fseek(pagefile, offset, SEEK_SET) == -1){
+        perror("Positioning in pagefile failed! ");
+        exit(EXIT_FAILURE);
+    }
+    
+    fread(pstart, sizeof(int), VMEM_PAGESIZE, pagefile);
 }
 
 
@@ -356,6 +437,24 @@ void fetch_page(int pt_idx){
 /* Die übergebene Pagetable_ID in die Pagefile speichern 
  * MMANAGE_PFNAME  = "./pagefile.bin" */
 void store_page(int pt_idx){
+    int offset = pt_idx * sizeof(int) * VMEM_PAGESIZE;
+    int frame = vmem->pt.entries[pt_idx].frame;
+    int *pstart = &vmem->data[frame * VMEM_PAGESIZE];
+    
+    /* Position in Pagefile setzten mithilfe des offset 
+     * SEEK_SET entspricht der Anfangsposition */
+    if (fseek(pagefile, offset, SEEK_SET) == VOID_IDX){
+        perror("positioning in Pagefile failure");
+        exit(EXIT_FAILURE);
+    }
+    
+    /* write gibt die Anzahl der in die Pagefile geschriebenen Bytes zurück.
+     * Bei einem Fehler wird -1 zurückgeliefert */
+    if (write(pstart, sizeof(int), VMEM_PAGESIZE, pagefile) == VOID_IDX){
+        perror("writing in Pagefile failure");
+        exit(EXIT_FAILURE);
+    }
+    
     
 }
 
@@ -368,6 +467,28 @@ void store_page(int pt_idx){
 /* Die Seitentabelle (Pagetable) aktualisieren. D.h. Änderungen speiern
  * Parameter: frame: Seitenrahmennummer */
 void update_pt(int frame){
+    int page_idx = vmem->adm.req_pageno;
+    int bm_idx = frame / VMEM_BITS_PER_BMWORD;
+    int bit = frame % VMEM_BITS_PER_BMWORD;
+    
+    /* Bitmap aktualisieren */
+    vmem->adm.bitmap[bm_idx] |= (1U << bit);
+    
+    /* next_alloc_idx (nächster seitenindex) inkrementieren */
+    vmem->adm.next_alloc_idx = (vmem->adm.next_alloc_idx + 1) % VMEM_NFRAMES;
+    
+    /* Seitenrahmen aktualisieren */
+    vmem->pt.framepage[frame] = page_idx;
+    
+    /* pt_entry aktualisieren
+     * flags: R-Bit (PTF_USED), M-Bit  (PTF_DIRTY), Present-Bit
+     * frame
+     * count*/
+    vmem->pt.entries[page_idx].flags |= PTF_USED | PTF_PRESENT;
+    vmem->pt.entries[page_idx].flags &= ~PTF_DIRTY;
+    vmem->pt.entries[page_idx].frame = frame;
+    vmem->pt.entries[page_idx].startcount = vmem->adm.g_count;
+    vmem->pt.entries[page_idx].count = 0;
     
 }
 
@@ -382,7 +503,20 @@ void update_pt(int frame){
  * Die Findung hängt von den jeweiligen Algorithmen (FIFO, CLOCK, LRU) ab
  * return: freier Platz*/
 int find_remove_frame(void){
-    return 0;
+    int remove_frame = VOID_IDX;
+    
+    /* Je nach der Belegung von VMEM_ALGO wird der zugehörige 
+     * Algorithmus für die suche ein Frame austauschen zu können.
+     * wird weder LRU noch CLOCK angegeben so erfolg die Suche mit
+     * hilfe des FIFO-AlgSorithmus */
+    switch (VMEM_ALGO) {
+        case VMEM_ALGO_LRU:   remove_frame = find_remove_lru(); break;
+        case VMEM_ALGO_CLOCK: remove_frame = find_remove_clock(); break;
+        case VMEM_ALGO_FIFO:
+        default:              remove_frame = find_remove_fifo(); break; 
+    }
+    
+    return remove_frame;
 }
 
 
@@ -394,7 +528,10 @@ int find_remove_frame(void){
 
 /* Algorithmus FIFO */
 int find_remove_fifo(void){
-    return 0;
+    /* index des Frames holen, welches vorne am Kopf steht 
+     *  -> ältestes Einfügungsdatum */
+    int remove_frame = vmem->adm.next_alloc_idx;
+    return remove_frame;
 }
 
 
@@ -406,7 +543,30 @@ int find_remove_fifo(void){
 
 /* Algorithmus LRU */
 int find_remove_lru(void){
-    return 0;
+    int i;
+    int remove_frame = VOID_IDX;
+    /* Maximaler Wert (Java -> MAX_VALUE) */
+    unsigned int smallest_count = -1;
+  
+    /* Frame suchen, welches das älteste Benutzungsdatum hat, welches
+     * also lange nicht mehr angefasst wurde */ 
+    for(i = 0; i < VMEM_NFRAMES; i++){
+        /* Hole nächste Seite */
+	int page = vmem->pt.framepage[i];
+        
+        /* wenn Seite kleiner (also Datum länger zurückliegt) als smallest_count,
+         * dann setzte smallest_count auf das Datum dieser Seite. 
+         * smallest_count ist am Anfang unendlich groß, sodass jeder Seite 
+         * kleiner wäre */
+        if(vmem->pt.entries[page].count < smallest_count){
+            smallest_count = vmem->pt.entries[page].count;
+            /* Nummer des Frames mit dem, bis hier hin, "kleinsten" 
+             * Zeitstempel setzen */
+            remove_frame = i;
+	}
+    }
+    
+    return remove_frame;
 }
 
 
@@ -418,7 +578,31 @@ int find_remove_lru(void){
 
 /* Algorithmus CLOCK*/
 int find_remove_clock(void){
-    return 0;
+    int remove_frame = vmem->adm.next_alloc_idx;
+    int frame = remove_frame;
+    int page;
+    
+    /* Gehe die Schleife solange durch, bis eine Seite gefunden wurde, 
+     * die ersetzt werden kann. Erkennlich daran, dass das Referenced-Bit (PTF_USED)
+     * Null ist. Nicht ersetztbare Seiten haben das R-Bit=1, diese werden
+     * auf Null geändert und es wird ein Frame weitergegangen. */
+    while(1) {
+        page = vmem->pt.framepage[frame];
+        
+        if(vmem->pt.entries[page].flags & PTF_USED) {
+           vmem->pt.entries[page].flags &= ~PTF_USED;
+           /* lösche References-Bit*/
+           frame = (frame + 1) % VMEM_NFRAMES; 
+        }else { 
+           /* Frame kann ersetzt werden, da R-Bit==0 */
+            remove_frame = frame; 
+            break; 
+        }
+    }/* end while */
+    
+    vmem->adm.next_alloc_idx = remove_frame;
+    
+    return remove_frame;
 }
 
 
