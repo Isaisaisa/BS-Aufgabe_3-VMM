@@ -23,6 +23,7 @@ struct vmem_struct *vmem = NULL; //Pointer auf die Struktur vmem_struct. (vgl mi
 FILE *pagefile = NULL;
 FILE *logfile = NULL;
 int signal_number = 0;          /* Received signal */
+int Pagefault_no = 0;
 
 /* Zähler für den Index im physikalischen Speicher, 
  * der bis zur maximalen Indexgröße des Speichers hochgezählt wird.
@@ -145,20 +146,50 @@ logger(struct logevent le)
 /*initialize pagefile*/
 void init_pagefile(const char *pfname){
     
-    int content_for_pagefile[VMEM_VIRTMEMSIZE];  //size of array = 1024 -> space in pagefile
+//    int content_for_pagefile[VMEM_VIRTMEMSIZE];  //size of array = 1024 -> space in pagefile
+//    
+//    srand(SEED); //Method of c library: void srand(unsigned int seed)
+//    
+//    int i;
+//    for(i = 0 ; i < VMEM_VIRTMEMSIZE ; i++ ) {
+//        content_for_pagefile[i] = rand() % 1000;  //Zahlen zwischen 0..99
+//    }
+//    
+//    FILE *data_out; 
+//    data_out = fopen( MMANAGE_PFNAME, "w");
+//    
+//    //fwrite(Array, Type in Array, Size of Array, Filename)
+//    if(!(fwrite(&content_for_pagefile, sizeof(int), VMEM_VIRTMEMSIZE, data_out))){
+//        perror("hulzkjhwhjtkl");
+//        exit(EXIT_FAILURE);
+//    }
     
-    srand(SEED); //Method of c library: void srand(unsigned int seed)
-    
-    int i;
-    for(i = 0 ; i < VMEM_VIRTMEMSIZE ; i++ ) {
-        content_for_pagefile[i] = rand() % 100;  //Zahlen zwischen 0..99
-    }
-    
-    FILE *data_out; 
-    data_out = fopen( MMANAGE_PFNAME, "w");
-    
-    //fwrite(Array, Type in Array, Size of Array, Filename)
-    fwrite(&content_for_pagefile, sizeof(int), VMEM_VIRTMEMSIZE, data_out);
+    int itemNumbers = VMEM_NPAGES * VMEM_PAGESIZE;
+	int data[itemNumbers];
+
+	srand(SEED); // Zufallszahlen-Seed randomisieren
+
+	int i;
+
+  // Auslagerungsdatei mit zufälligen Werten...
+	for(i = 0; i < itemNumbers; i++) {
+		data[i] = rand() % 1000; // ...zwischen 0-999 füllen
+	}
+
+  // Dateistream öffnen...
+	pagefile = fopen(pfname, "w+b");
+	if(!pagefile) {
+		perror("Error creating pagefile");
+		exit(EXIT_FAILURE);
+	}
+
+  // ...und Daten ausschreiben
+	int write_result = fwrite(data, sizeof(int), itemNumbers, pagefile);
+	if(!write_result) {
+		perror("Error creating pagefile");
+		exit(EXIT_FAILURE);
+	}
+
     
 }
 
@@ -171,12 +202,12 @@ void init_pagefile(const char *pfname){
 
 /* initialize virtual memory*/
 void vmem_init(void){
-    key_t shm_key = 0;
+    key_t shm_key = 23456;
     int shm_id = -1;
     
     /* Create shared memory 
      * ftok() generates an IPC key based on path and id */
-    shm_key = ftok(SHMKEY, SHMPROCID);
+//    shm_key = ftok(SHMKEY, SHMPROCID);
     
     /* Set the IPC_CREAT flag 
      * shmget(Shared Memory kann von mehr als ein Prozess zugegriffen werden, Größe des Shared Memory in Bytes, ein Flag)*/
@@ -188,7 +219,7 @@ void vmem_init(void){
     }
     
     /* Shared Memory für das Programm verfügbar machen */
-    int vmem = shmat(shm_id, NULL, 0);
+    vmem = shmat(shm_id, NULL, 0);
                                                         //http://man7.org/linux/man-pages/man2/shmat.2.html
     if (vmem == (void *)-1) {
         fprintf(stderr, "making the shared memory accessible to the program (shmat) failed\n");
@@ -231,7 +262,7 @@ void sighandler(int signo){
         allocate_page();
     }else if(signo == SIGUSR2){
         dump_pt();
-    }else if(igno == SIGINT){
+    }else if(signo == SIGINT){
         cleanup();
         exit(EXIT_SUCCESS);
     }
@@ -250,7 +281,7 @@ void allocate_page(void){
     int removed_page_id = VOID_IDX;
     
     /* wenn Page schon geladen */
-    if(vmem->pt.entries[req_pageno].flags & PTF_PRESENT){
+    if(vmem->pt.entries[requested_page_number].flags & PTF_PRESENT){
         /* dann gehe aus der Funktion heraus */
         return;
     }
@@ -285,13 +316,17 @@ void allocate_page(void){
         /* schreibe den freien Platz in die Struktur */
         removed_page_id = vmem->pt.framepage[free_space_in_bitmap];
         
+        Pagefault_no++;
+        printf("Pagefault number: %d,   ", Pagefault_no);
+        printf("free frame number %d \n", free_space_in_bitmap);
+        
         /* pb_flag_of_page: Present-Bit der Seite */
-        int pb_flag_of_page = vmem->pt.entries[removed_page_id].flags;
+//        int pb_flag_of_page = vmem->pt.entries[removed_page_id].flags;
         
     }
     
     /* Wenn Seite (Page) geändert wurde */
-    if(pb_flag_of_page == PTF_DIRTY){  /* wenn das Flag des freigemachten Platzes auf 2 (Dirty) gesetzt ist */    /*--------------------- HIER EVTL. STATT == EIN & !!!*/
+    if(vmem->pt.entries[removed_page_id].flags & PTF_DIRTY){  /* wenn das Flag des freigemachten Platzes auf 2 (Dirty) gesetzt ist */    /*--------------------- HIER EVTL. STATT == EIN & !!!*/
         store_page(removed_page_id);                           /* dann speichere die Seite in der Pagefile */
     }
 
@@ -302,7 +337,7 @@ void allocate_page(void){
      *                &0000 (Komplement von Present-Bit 1)
      *                =0000 (Flag ist jetzt 0)
      */
-    pb_flag_of_page = (pb_flag_of_page & ~PTF_PRESENT);  
+    vmem->pt.entries[removed_page_id].flags = (vmem->pt.entries[removed_page_id].flags & ~PTF_PRESENT);  
         
     
     
@@ -449,7 +484,7 @@ void store_page(int pt_idx){
     
     /* write gibt die Anzahl der in die Pagefile geschriebenen Bytes zurück.
      * Bei einem Fehler wird -1 zurückgeliefert */
-    if (write(pstart, sizeof(int), VMEM_PAGESIZE, pagefile) == VOID_IDX){
+    if(!fwrite(pstart, sizeof(int), VMEM_PAGESIZE, pagefile)){
         perror("writing in Pagefile failure");
         exit(EXIT_FAILURE);
     }
@@ -486,8 +521,7 @@ void update_pt(int frame){
     vmem->pt.entries[page_idx].flags |= PTF_USED | PTF_PRESENT;
     vmem->pt.entries[page_idx].flags &= ~PTF_DIRTY;
     vmem->pt.entries[page_idx].frame = frame;
-    vmem->pt.entries[page_idx].startcount = vmem->adm.g_count;
-    vmem->pt.entries[page_idx].count = 0;
+    vmem->pt.entries[page_idx].count = vmem->adm.g_count;
     
 }
 

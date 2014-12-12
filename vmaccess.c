@@ -5,7 +5,7 @@
 
 #include "vmaccess.h"
 
-struct vmem_struct *virtuel_mem = NULL;
+struct vmem_struct *vmem = NULL;
 
 /* Connect to shared memory (key from vmem.h) */
 void vm_init(void){
@@ -34,8 +34,8 @@ void vm_init(void){
 
 
 /* Physikalische Speicheradresse errechenen mit Hilfe der virtuellen Adresse */
-int get_phys_index(int adress, int permission){
-    if(virtuel_mem == NULL){
+int get_phys_index(int address, int permission){
+    if(vmem == NULL){
         vm_init();
     }
     
@@ -51,6 +51,8 @@ int get_phys_index(int adress, int permission){
 
     /* Page nicht geladen? */
     if(!req_page_is_loaded){
+        
+       
         
        /* Adresse der Page in mmanage speichern */
       vmem->adm.req_pageno = page;
@@ -68,7 +70,7 @@ int get_phys_index(int adress, int permission){
     
     /* Prüfen, ob eine Schreiboperation durchgeführt wurde
      * dies wird nur durchgeführ, wenn vmem_write diese Funktion aufruft */
-    if(write){
+    if(permission){
       /* M-Bit (Dirty-Bit) setzen */
       vmem->pt.entries[page].flags |= PTF_DIRTY;
     }
